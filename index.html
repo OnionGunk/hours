@@ -260,11 +260,17 @@
     const p = new URLSearchParams(text.slice(i + 7));
     for (const k of ['svc', 'tpl', 'key', 'to', 'name']) if (p.get(k)) settings[k] = p.get(k);
     save('hours.settings', settings);
+    // ev=YYYYMMDDHHmm + i|o|s|e, dot-separated, in local time
+    const types = { i: 'in', o: 'out', s: 'bs', e: 'be' };
+    for (const code of (p.get('ev') || '').split('.').filter(Boolean)) {
+      const m = code.match(/^(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)([iose])$/);
+      if (!m) continue;
+      const t = new Date(+m[1], m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+      const type = types[m[6]];
+      if (!events.some(e => e.t === t && e.type === type)) events.push({ t, type });
+    }
+    persist();
     return true;
-  }
-  if (applySetup(location.hash)) {
-    history.replaceState(null, '', location.pathname);
-    setTimeout(() => toast('Email service connected ✅'), 300);
   }
 
   const persist = () => { events.sort((a, b) => a.t - b.t); save('hours.events', events); };
@@ -467,7 +473,8 @@
     readSettings();
     if (!applySetup(text)) { toast('That doesn\'t look like a setup link'); return; }
     for (const [id, k] of Object.entries(fields)) $(id).value = settings[k] || '';
-    toast('Email service connected ✅');
+    render();
+    toast('Setup applied ✅');
   };
   $('saveSettings').onclick =() => { readSettings(); $('settings').close(); flushPending(); };
   $('sendNow').onclick = async () => {
@@ -621,6 +628,11 @@
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+  if (applySetup(location.hash)) {
+    history.replaceState(null, '', location.pathname);
+    setTimeout(() => toast('Setup applied ✅'), 300);
+  }
 
   render();
   flushPending();
