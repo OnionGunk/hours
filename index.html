@@ -1,0 +1,604 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hours">
+<meta name="theme-color" content="#0c0c10">
+<title>Hours</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #0c0c10;
+    --card: #17171d;
+    --card-2: #202028;
+    --line: #2a2a33;
+    --text: #f4f4f6;
+    --muted: #8d8d99;
+    --in-a: #34d399;
+    --in-b: #059669;
+    --out-a: #fb7185;
+    --out-b: #e11d48;
+    --brk: #fbbf24;
+    --accent: #a5b4fc;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  button, input { font-family: inherit; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    min-height: 100vh;
+    padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px);
+    background:
+      radial-gradient(120% 60% at 50% -10%, rgba(165,180,252,.10), transparent 60%),
+      var(--bg);
+    -webkit-user-select: none; user-select: none;
+  }
+  .wrap { max-width: 460px; margin: 0 auto; }
+  header { display: flex; align-items: center; justify-content: space-between; }
+  .date { color: var(--muted); font-size: 15px; font-weight: 500; }
+  .icon-btn {
+    width: 40px; height: 40px; border-radius: 50%; border: 0;
+    background: var(--card); color: var(--muted); display: grid; place-items: center;
+  }
+  .icon-btn svg { width: 20px; height: 20px; }
+
+  .hero { text-align: center; margin: 28px 0 8px; }
+  .status {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); padding: 6px 12px; border-radius: 999px; background: var(--card);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .status.working .dot { background: var(--in-a); box-shadow: 0 0 10px var(--in-a); }
+  .status.break .dot { background: var(--brk); box-shadow: 0 0 10px var(--brk); }
+  .clock {
+    font-size: 64px; font-weight: 200; letter-spacing: -.02em; margin: 14px 0 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .sub { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; min-height: 20px; }
+
+  .main-btn {
+    display: block; margin: 28px auto 18px; width: 200px; height: 200px; border-radius: 50%; border: 0;
+    color: #fff; font-size: 22px; font-weight: 600; letter-spacing: .01em;
+    background: radial-gradient(circle at 30% 25%, var(--in-a), var(--in-b));
+    box-shadow: 0 20px 50px -10px rgba(5,150,105,.55), inset 0 1px 0 rgba(255,255,255,.25);
+    transition: transform .15s ease, box-shadow .3s ease, background .3s ease;
+  }
+  .main-btn.out {
+    background: radial-gradient(circle at 30% 25%, var(--out-a), var(--out-b));
+    box-shadow: 0 20px 50px -10px rgba(225,29,72,.55), inset 0 1px 0 rgba(255,255,255,.25);
+  }
+  .main-btn:active { transform: scale(.95); }
+  .main-btn small { display: block; font-size: 13px; font-weight: 500; opacity: .8; margin-top: 4px; }
+
+  .break-btn {
+    display: block; margin: 0 auto; padding: 14px 28px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    font-size: 16px; font-weight: 600; transition: opacity .2s, transform .15s;
+  }
+  .break-btn:active { transform: scale(.97); }
+  .break-btn.on { background: rgba(251,191,36,.14); border-color: rgba(251,191,36,.5); color: var(--brk); }
+  .break-btn:disabled { opacity: .35; }
+
+  .card { background: var(--card); border-radius: 20px; padding: 18px; margin-top: 22px; }
+  .card h2 { margin: 0 0 12px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .log { list-style: none; margin: 0; padding: 0; }
+  .log li {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 11px 0; border-top: 1px solid var(--line); font-variant-numeric: tabular-nums;
+  }
+  .log li:first-child { border-top: 0; }
+  .log .lbl { display: flex; align-items: center; gap: 10px; }
+  .log .pip { width: 8px; height: 8px; border-radius: 50%; }
+  .log .t { color: var(--muted); }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 8px 0; }
+
+  .week-nav { display: flex; align-items: center; gap: 6px; }
+  .week-nav button { background: var(--card-2); border: 0; color: var(--text); width: 30px; height: 30px; border-radius: 50%; font-size: 16px; }
+  .week-label { text-transform: none; letter-spacing: 0; font-size: 14px; color: var(--text); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 15px; }
+  th { text-align: right; font-size: 12px; color: var(--muted); font-weight: 600; padding: 0 0 8px; }
+  th:first-child, td:first-child { text-align: left; }
+  td { text-align: right; padding: 9px 0; border-top: 1px solid var(--line); }
+  td.d small { color: var(--muted); margin-left: 6px; }
+  tr.today td { color: var(--accent); }
+  tr.zero td { color: var(--muted); }
+  tfoot td { font-weight: 700; border-top: 1px solid var(--muted); padding-top: 12px; }
+  .sent-note { color: var(--muted); font-size: 13px; margin-top: 12px; text-align: center; }
+
+  dialog {
+    width: min(100% - 32px, 460px); border: 0; border-radius: 22px; padding: 22px;
+    background: var(--card); color: var(--text);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.6); backdrop-filter: blur(4px); }
+  dialog h3 { margin: 0 0 4px; font-size: 20px; }
+  dialog p.hint { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+  input {
+    width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font-size: 16px; -webkit-user-select: text; user-select: text;
+  }
+  input[type=datetime-local] { min-height: 46px; }
+  .row { display: flex; gap: 10px; margin-top: 20px; }
+  .btn {
+    flex: 1; padding: 13px; border-radius: 12px; border: 0; font-size: 16px; font-weight: 600;
+    background: var(--card-2); color: var(--text);
+  }
+  .btn.primary { background: var(--accent); color: #111; }
+  .btn.danger { background: rgba(251,113,133,.15); color: var(--out-a); }
+  .toggle { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; font-size: 15px; }
+  .toggle input { width: auto; transform: scale(1.3); }
+  details { margin-top: 16px; }
+  summary { color: var(--accent); font-size: 14px; font-weight: 600; }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); transform: translate(-50%, 20px);
+    background: var(--card-2); color: var(--text); padding: 12px 18px; border-radius: 14px; font-size: 14px;
+    opacity: 0; transition: .25s; pointer-events: none; max-width: calc(100% - 32px); text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="date" id="date"></div>
+    <button class="icon-btn" id="openSettings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+
+  <section class="hero">
+    <div class="status" id="status"><span class="dot"></span><span id="statusText">Off the clock</span></div>
+    <div class="clock" id="clock">0:00:00</div>
+    <div class="sub" id="sub"></div>
+  </section>
+
+  <button class="main-btn" id="mainBtn">Clock In</button>
+  <button class="break-btn" id="breakBtn" disabled>Start Break</button>
+
+  <section class="card">
+    <h2>Today</h2>
+    <ul class="log" id="log"></ul>
+  </section>
+
+  <section class="card">
+    <h2>
+      <span>Week</span>
+      <span class="week-nav">
+        <button id="prevWeek" aria-label="Previous week">‹</button>
+        <span class="week-label" id="weekLabel"></span>
+        <button id="nextWeek" aria-label="Next week">›</button>
+      </span>
+    </h2>
+    <table>
+      <thead><tr><th>Day</th><th>Total hrs</th><th>Adjusted hrs</th></tr></thead>
+      <tbody id="weekBody"></tbody>
+      <tfoot><tr><td>Total</td><td id="wkTotal"></td><td id="wkAdj"></td></tr></tfoot>
+    </table>
+    <div class="row">
+      <button class="btn" id="shareLink">Share link</button>
+      <button class="btn" id="exportCsv">Export file</button>
+    </div>
+    <div class="sent-note" id="sentNote"></div>
+  </section>
+</div>
+
+<!-- Settings -->
+<dialog id="settings">
+  <h3>Settings</h3>
+  <p class="hint">Your weekly report (Saturday–Friday) emails itself when you clock out on Friday.</p>
+  <label for="sName">Your name</label>
+  <input id="sName" autocomplete="name" placeholder="Name on the report">
+  <label for="sTo">Send report to</label>
+  <input id="sTo" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com">
+  <div class="toggle"><span>Send automatically on Friday</span><input type="checkbox" id="sAuto"></div>
+  <details>
+    <summary>Email service (EmailJS)</summary>
+    <label for="sSvc">Service ID</label>
+    <input id="sSvc" placeholder="service_xxxxxxx" autocapitalize="off" autocorrect="off">
+    <label for="sTpl">Template ID</label>
+    <input id="sTpl" placeholder="template_xxxxxxx" autocapitalize="off" autocorrect="off">
+    <label for="sKey">Public key</label>
+    <input id="sKey" placeholder="xxxxxxxxxxxxxxx" autocapitalize="off" autocorrect="off">
+  </details>
+  <div class="row">
+    <button class="btn" id="sendNow">Send this week now</button>
+  </div>
+  <div class="row">
+    <button class="btn primary" id="saveSettings">Done</button>
+  </div>
+</dialog>
+
+<!-- Edit entry -->
+<dialog id="editDlg">
+  <h3 id="editTitle">Edit</h3>
+  <p class="hint">Fix a time if you forgot to tap.</p>
+  <label for="editTime">Time</label>
+  <input id="editTime" type="datetime-local">
+  <div class="row">
+    <button class="btn danger" id="editDelete">Delete</button>
+    <button class="btn" id="editCancel">Cancel</button>
+    <button class="btn primary" id="editSave">Save</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const LABEL = { in: 'Clock in', out: 'Clock out', bs: 'Break start', be: 'Break end' };
+  const COLOR = { in: 'var(--in-a)', out: 'var(--out-a)', bs: 'var(--brk)', be: 'var(--brk)' };
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // ---------- storage ----------
+  function load(key, fallback) {
+    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+  }
+  function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+
+  let events = load('hours.events', []);          // [{t: ms, type: 'in'|'out'|'bs'|'be'}]
+  let settings = load('hours.settings', { name: '', to: '', auto: true, svc: '', tpl: '', key: '' });
+  let sent = load('hours.sent', {});              // weekStartKey -> ms sent
+  let pending = load('hours.pending', []);        // weekStartKey[] waiting to send
+  let weekOffset = 0;
+
+  const persist = () => { events.sort((a, b) => a.t - b.t); save('hours.events', events); };
+
+  // ---------- dates ----------
+  const pad = n => String(n).padStart(2, '0');
+  const dayKey = d => { d = new Date(d); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+  const startOfDay = d => { d = new Date(d); d.setHours(0, 0, 0, 0); return d; };
+  // Work week runs Saturday through Friday
+  function weekStart(d) {
+    const s = startOfDay(d);
+    s.setDate(s.getDate() - (s.getDay() + 1) % 7);
+    return s;
+  }
+  const addDays = (d, n) => { d = new Date(d); d.setDate(d.getDate() + n); return d; };
+  const fmtTime = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const fmtShort = d => new Date(d).toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const fmtHMS = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 3600)}:${pad(Math.floor(s / 60) % 60)}:${pad(s % 60)}`; };
+  const fmtHM = ms => { const m = Math.round(Math.max(0, ms) / 60000); return `${Math.floor(m / 60)}h ${pad(m % 60)}m`; };
+  const hrs = ms => (Math.max(0, ms) / 3600000).toFixed(2);
+
+  // ---------- core math ----------
+  // Walks the event list and returns current status plus per-day totals.
+  // A shift (and its breaks) count toward the day it was clocked in.
+  function summarize(now = Date.now()) {
+    const days = {};
+    let inAt = null, brkAt = null, day = null;
+    const bucket = k => (days[k] ||= { total: 0, brk: 0, first: null, last: null });
+    for (const e of events) {
+      if (e.type === 'in' && inAt == null) {
+        inAt = e.t; day = dayKey(e.t);
+        const b = bucket(day); if (b.first == null) b.first = e.t;
+      } else if (e.type === 'bs' && inAt != null && brkAt == null) {
+        brkAt = e.t;
+      } else if (e.type === 'be' && brkAt != null) {
+        bucket(day).brk += e.t - brkAt; brkAt = null;
+      } else if (e.type === 'out' && inAt != null) {
+        const b = bucket(day);
+        if (brkAt != null) { b.brk += e.t - brkAt; brkAt = null; }
+        b.total += e.t - inAt; b.last = e.t; inAt = null;
+      }
+    }
+    if (inAt != null) {
+      const b = bucket(day);
+      b.total += now - inAt;
+      if (brkAt != null) b.brk += now - brkAt;
+    }
+    const status = inAt == null ? 'off' : brkAt == null ? 'working' : 'break';
+    return { days, status, inAt, brkAt };
+  }
+
+  function weekRows(start, now = Date.now()) {
+    const { days } = summarize(now);
+    const rows = [];
+    let total = 0, brk = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(start, i);
+      const b = days[dayKey(d)] || { total: 0, brk: 0, first: null, last: null };
+      total += b.total; brk += b.brk;
+      rows.push({ date: d, ...b });
+    }
+    return { rows, total, brk };
+  }
+
+  // ---------- actions ----------
+  function add(type) { events.push({ t: Date.now(), type }); persist(); render(); }
+
+  $('mainBtn').onclick = () => {
+    const { status } = summarize();
+    if (status === 'off') { add('in'); toast('Clocked in'); return; }
+    if (status === 'break') events.push({ t: Date.now(), type: 'be' });
+    add('out');
+    const td = summarize().days[dayKey(Date.now())] || { total: 0, brk: 0 };
+    if (new Date().getDay() === 5) { toast('Weekend unlocked 🎉'); confetti(); }
+    else if (td.total - td.brk >= 10 * 3600000) toast('10+ hours. Keith owes you a sandwich 🥪');
+    else toast('Clocked out');
+    // Friday clock-out sends the week's report
+    if (new Date().getDay() === 5 && settings.auto) queueWeek(weekStart(new Date()));
+    flushPending();
+  };
+
+  $('breakBtn').onclick = () => {
+    const { status, brkAt } = summarize();
+    if (status === 'working') { add('bs'); toast('Break started'); }
+    else if (status === 'break') {
+      const long = Date.now() - brkAt > 60 * 60000;
+      add('be'); toast(long ? 'Long lunch? We won\'t tell Keith 🤫' : 'Back to work');
+    }
+  };
+
+  // Tap the date 7 times
+  let taps = 0, tapTimer;
+  $('date').onclick = () => {
+    clearTimeout(tapTimer); tapTimer = setTimeout(() => taps = 0, 1500);
+    if (++taps === 7) { taps = 0; toast('Keith mode activated 😎'); confetti(); }
+  };
+
+  // ---------- render ----------
+  function render() {
+    const now = Date.now();
+    const { days, status, brkAt } = summarize(now);
+    const today = days[dayKey(now)] || { total: 0, brk: 0 };
+
+    $('date').textContent = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+    const st = $('status');
+    st.className = 'status ' + status;
+    $('statusText').textContent = { off: 'Off the clock', working: 'Working', break: 'On break' }[status];
+
+    $('clock').textContent = fmtHMS(today.total - today.brk);
+    $('sub').textContent = status === 'break'
+      ? `Break ${fmtHMS(now - brkAt)}`
+      : today.brk > 0 ? `Breaks today ${fmtHM(today.brk)}` : '';
+
+    const mb = $('mainBtn');
+    mb.classList.toggle('out', status !== 'off');
+    mb.innerHTML = status === 'off' ? 'Clock In' : 'Clock Out';
+
+    const bb = $('breakBtn');
+    bb.disabled = status === 'off';
+    bb.classList.toggle('on', status === 'break');
+    bb.textContent = status === 'break' ? 'End Break' : 'Start Break';
+
+    renderLog();
+    renderWeek(now);
+  }
+
+  function renderLog() {
+    const k = dayKey(Date.now());
+    const list = events.map((e, i) => ({ ...e, i })).filter(e => dayKey(e.t) === k);
+    const ul = $('log');
+    if (!list.length) { ul.innerHTML = '<li class="empty" style="justify-content:center">Nothing yet today</li>'; return; }
+    ul.innerHTML = list.map(e => `
+      <li data-i="${e.i}">
+        <span class="lbl"><span class="pip" style="background:${COLOR[e.type]}"></span>${LABEL[e.type]}</span>
+        <span class="t">${fmtTime(e.t)}</span>
+      </li>`).join('');
+    ul.querySelectorAll('li[data-i]').forEach(li => li.onclick = () => openEdit(+li.dataset.i));
+  }
+
+  function renderWeek(now) {
+    const start = addDays(weekStart(now), weekOffset * 7);
+    const { rows, total, brk } = weekRows(start, now);
+    $('weekLabel').textContent = `${fmtShort(start)} – ${fmtShort(addDays(start, 6))}`;
+    const tk = dayKey(now);
+    $('weekBody').innerHTML = rows.map(r => `
+      <tr class="${dayKey(r.date) === tk ? 'today' : ''} ${r.total ? '' : 'zero'}">
+        <td class="d">${DAYS[r.date.getDay()]}<small>${r.date.getDate()}</small></td>
+        <td>${hrs(r.total)}</td>
+        <td>${hrs(r.total - r.brk)}</td>
+      </tr>`).join('');
+    $('wkTotal').textContent = hrs(total);
+    $('wkAdj').textContent = hrs(total - brk);
+    const s = sent[dayKey(start)];
+    $('sentNote').textContent = s ? `Report sent ${new Date(s).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}`
+      : pending.includes(dayKey(start)) ? 'Report waiting to send' : '';
+    $('nextWeek').style.visibility = weekOffset < 0 ? 'visible' : 'hidden';
+  }
+
+  $('prevWeek').onclick = () => { weekOffset--; render(); };
+  $('nextWeek').onclick = () => { weekOffset = Math.min(0, weekOffset + 1); render(); };
+
+  // ---------- edit entries ----------
+  let editing = null;
+  const toLocalInput = t => { const d = new Date(t); return `${dayKey(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  function openEdit(i) {
+    editing = i;
+    $('editTitle').textContent = LABEL[events[i].type];
+    $('editTime').value = toLocalInput(events[i].t);
+    $('editDlg').showModal();
+  }
+  $('editCancel').onclick = () => $('editDlg').close();
+  $('editSave').onclick = () => {
+    const t = new Date($('editTime').value).getTime();
+    if (!isNaN(t)) { events[editing].t = t; persist(); render(); }
+    $('editDlg').close();
+  };
+  $('editDelete').onclick = () => {
+    if (confirm(`Delete this ${LABEL[events[editing].type].toLowerCase()}?`)) {
+      events.splice(editing, 1); persist(); render();
+    }
+    $('editDlg').close();
+  };
+
+  // ---------- settings ----------
+  const fields = { sName: 'name', sTo: 'to', sSvc: 'svc', sTpl: 'tpl', sKey: 'key' };
+  $('openSettings').onclick = () => {
+    for (const [id, k] of Object.entries(fields)) $(id).value = settings[k] || '';
+    $('sAuto').checked = !!settings.auto;
+    $('settings').showModal();
+  };
+  function readSettings() {
+    for (const [id, k] of Object.entries(fields)) settings[k] = $(id).value.trim();
+    settings.auto = $('sAuto').checked;
+    save('hours.settings', settings);
+  }
+  $('saveSettings').onclick = () => { readSettings(); $('settings').close(); flushPending(); };
+  $('sendNow').onclick = async () => {
+    readSettings();
+    const start = addDays(weekStart(Date.now()), weekOffset * 7);
+    try { await sendWeek(start); toast('Report sent'); }
+    catch (e) { toast(e.message); }
+    render();
+  };
+  $('exportCsv').onclick = () => exportFile(addDays(weekStart(Date.now()), weekOffset * 7));
+  $('shareLink').onclick = () => shareLink(addDays(weekStart(Date.now()), weekOffset * 7));
+
+  // Packs the week into the URL fragment (never sent to any server) for report.html
+  async function shareLink(start) {
+    const { rows } = weekRows(start);
+    const min = ms => Math.round(ms / 60000);
+    const data = {
+      n: settings.name || '',
+      s: dayKey(start),
+      d: rows.map(r => [r.first ? fmtTime(r.first) : '', r.last ? fmtTime(r.last) : '', min(r.total), min(r.brk)])
+    };
+    const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(data)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const url = new URL('report.html', location.href).href + '#' + b64;
+    const title = `Hours for ${fmtShort(start)} – ${fmtShort(addDays(start, 6))}`;
+    if (navigator.share) {
+      try { await navigator.share({ title, text: title, url }); } catch {}
+      return;
+    }
+    try { await navigator.clipboard.writeText(url); toast('Link copied'); } catch { prompt('Copy this link', url); }
+  }
+
+  // ---------- report ----------
+  function buildReport(start) {
+    const { rows, total, brk } = weekRows(start);
+    const end = addDays(start, 6);
+    const range = `${fmtShort(start)} – ${fmtShort(end)}, ${end.getFullYear()}`;
+    const who = settings.name ? `${settings.name} · ` : '';
+    const subject = `Weekly hours: ${who}${range}`;
+    const cell = 'padding:8px 12px;border-bottom:1px solid #e5e7eb;';
+    const num = cell + 'text-align:right;font-variant-numeric:tabular-nums;';
+    const body = rows.map(r => `<tr>
+        <td style="${cell}">${DAYS[r.date.getDay()]} ${fmtShort(r.date)}</td>
+        <td style="${cell}">${r.first ? fmtTime(r.first) : '—'}</td>
+        <td style="${cell}">${r.last ? fmtTime(r.last) : '—'}</td>
+        <td style="${num}">${hrs(r.brk)}</td>
+        <td style="${num}">${hrs(r.total)}</td>
+        <td style="${num}">${hrs(r.total - r.brk)}</td></tr>`).join('');
+    const th = 'padding:8px 12px;text-align:left;background:#f3f4f6;font-size:13px;';
+    const html = `<div style="font-family:-apple-system,Segoe UI,Arial,sans-serif;color:#111">
+      <h2 style="margin:0 0 4px">Weekly hours</h2>
+      <p style="margin:0 0 16px;color:#555">${settings.name ? settings.name + ' — ' : ''}${range}</p>
+      <table style="border-collapse:collapse;font-size:14px">
+        <thead><tr><th style="${th}">Day</th><th style="${th}">In</th><th style="${th}">Out</th>
+        <th style="${th}text-align:right">Break hrs</th><th style="${th}text-align:right">Total hours</th>
+        <th style="${th}text-align:right">Adjusted hours</th></tr></thead>
+        <tbody>${body}</tbody>
+        <tfoot><tr><td style="${cell}font-weight:700" colspan="3">Week total</td>
+        <td style="${num}font-weight:700">${hrs(brk)}</td>
+        <td style="${num}font-weight:700">${hrs(total)}</td>
+        <td style="${num}font-weight:700">${hrs(total - brk)}</td></tr></tfoot>
+      </table></div>`;
+    const csv = [['Day', 'Date', 'Clock in', 'Clock out', 'Break hours', 'Total hours', 'Adjusted hours']]
+      .concat(rows.map(r => [DAYS[r.date.getDay()], dayKey(r.date), r.first ? fmtTime(r.first) : '', r.last ? fmtTime(r.last) : '', hrs(r.brk), hrs(r.total), hrs(r.total - r.brk)]))
+      .concat([['Week total', '', '', '', hrs(brk), hrs(total), hrs(total - brk)]])
+      .map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    return { subject, html, csv };
+  }
+
+  async function sendWeek(start) {
+    if (!settings.to) throw new Error('Add an email address in Settings');
+    if (!settings.svc || !settings.tpl || !settings.key) throw new Error('Finish email service setup in Settings');
+    const { subject, html } = buildReport(start);
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id: settings.svc, template_id: settings.tpl, user_id: settings.key,
+        template_params: { to_email: settings.to, subject, message_html: html, name: settings.name || 'Hours' }
+      })
+    });
+    if (!res.ok) throw new Error('Email failed: ' + (await res.text()).slice(0, 120));
+    sent[dayKey(start)] = Date.now(); save('hours.sent', sent);
+    pending = pending.filter(k => k !== dayKey(start)); save('hours.pending', pending);
+  }
+
+  function queueWeek(start) {
+    const k = dayKey(start);
+    if (!pending.includes(k)) { pending.push(k); save('hours.pending', pending); }
+  }
+
+  // Sends anything queued. Also catches a past week that never got its
+  // Friday clock-out (day off, forgot to clock out, no signal).
+  let flushing = false;
+  async function flushPending() {
+    if (flushing || !settings.auto) return;
+    flushing = true;
+    const thisWeek = dayKey(weekStart(Date.now()));
+    const lastWeek = weekStart(addDays(Date.now(), -7));
+    const lk = dayKey(lastWeek);
+    if (!sent[lk] && weekRows(lastWeek).total > 0) queueWeek(lastWeek);
+    for (const k of [...pending]) {
+      const [y, m, d] = k.split('-').map(Number);
+      try { await sendWeek(new Date(y, m - 1, d)); toast(k === thisWeek ? 'Weekly report sent' : 'Last week\'s report sent'); }
+      catch (e) { if (settings.to && settings.svc) toast('Report will retry: ' + e.message); break; }
+    }
+    flushing = false;
+    render();
+  }
+
+  async function exportFile(start) {
+    const { csv } = buildReport(start);
+    const name = `hours-${dayKey(start)}.csv`;
+    const file = new File([csv], name, { type: 'text/csv' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try { await navigator.share({ files: [file], title: name }); } catch {}
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  // ---------- misc ----------
+  let toastTimer;
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+  }
+
+  function confetti() {
+    const colors = ['#34d399', '#fbbf24', '#fb7185', '#a5b4fc', '#ffffff'];
+    for (let i = 0; i < 80; i++) {
+      const p = document.createElement('span');
+      const size = 6 + Math.random() * 6;
+      p.style.cssText = `position:fixed;top:-12px;left:${Math.random() * 100}vw;width:${size}px;height:${size * .5}px;` +
+        `background:${colors[i % colors.length]};border-radius:2px;pointer-events:none;z-index:99`;
+      document.body.appendChild(p);
+      p.animate([
+        { transform: 'translate(0,0) rotate(0)' },
+        { transform: `translate(${(Math.random() - .5) * 200}px,${innerHeight + 40}px) rotate(${Math.random() * 720}deg)` }
+      ], { duration: 1800 + Math.random() * 1400, easing: 'cubic-bezier(.2,.6,.4,1)' }).onfinish = () => p.remove();
+    }
+  }
+
+  // Close dialogs by tapping the backdrop
+  document.querySelectorAll('dialog').forEach(d => d.addEventListener('click', e => { if (e.target === d) d.close(); }));
+
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { render(); flushPending(); } });
+  window.addEventListener('online', flushPending);
+  setInterval(() => { if (!document.hidden) render(); }, 1000);
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+  render();
+  flushPending();
+})();
+</script>
+</body>
+</html>
