@@ -201,6 +201,7 @@
   <div class="toggle"><span>Send automatically on Friday</span><input type="checkbox" id="sAuto"></div>
   <details>
     <summary>Email service (EmailJS)</summary>
+    <div class="row"><button class="btn" id="pasteSetup">Paste setup link</button></div>
     <label for="sSvc">Service ID</label>
     <input id="sSvc" placeholder="service_xxxxxxx" autocapitalize="off" autocorrect="off">
     <label for="sTpl">Template ID</label>
@@ -249,6 +250,22 @@
   let sent = load('hours.sent', {});              // weekStartKey -> ms sent
   let pending = load('hours.pending', []);        // weekStartKey[] waiting to send
   let weekOffset = 0;
+
+  // Setup link: ...#setup?svc=..&tpl=..&key=.. fills in the email service.
+  // Works when opened directly, or pasted via Settings (the Home Screen app
+  // has its own storage, separate from Safari).
+  function applySetup(text) {
+    const i = text.indexOf('#setup?');
+    if (i < 0) return false;
+    const p = new URLSearchParams(text.slice(i + 7));
+    for (const k of ['svc', 'tpl', 'key', 'to', 'name']) if (p.get(k)) settings[k] = p.get(k);
+    save('hours.settings', settings);
+    return true;
+  }
+  if (applySetup(location.hash)) {
+    history.replaceState(null, '', location.pathname);
+    setTimeout(() => toast('Email service connected ✅'), 300);
+  }
 
   const persist = () => { events.sort((a, b) => a.t - b.t); save('hours.events', events); };
 
@@ -443,7 +460,16 @@
     settings.auto = $('sAuto').checked;
     save('hours.settings', settings);
   }
-  $('saveSettings').onclick = () => { readSettings(); $('settings').close(); flushPending(); };
+  $('pasteSetup').onclick = async () => {
+    let text = '';
+    try { text = await navigator.clipboard.readText(); } catch {}
+    if (!text) text = prompt('Paste your setup link') || '';
+    readSettings();
+    if (!applySetup(text)) { toast('That doesn\'t look like a setup link'); return; }
+    for (const [id, k] of Object.entries(fields)) $(id).value = settings[k] || '';
+    toast('Email service connected ✅');
+  };
+  $('saveSettings').onclick =() => { readSettings(); $('settings').close(); flushPending(); };
   $('sendNow').onclick = async () => {
     readSettings();
     const start = addDays(weekStart(Date.now()), weekOffset * 7);
