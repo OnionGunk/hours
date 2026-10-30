@@ -98,6 +98,13 @@
   .log .pip { width: 8px; height: 8px; border-radius: 50%; }
   .log .t { color: var(--muted); }
   .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 8px 0; }
+  #dayCard { touch-action: pan-y; }
+  .log.slide-l { animation: slideL .22s ease; }
+  .log.slide-r { animation: slideR .22s ease; }
+  @keyframes slideL { from { opacity: 0; transform: translateX(24px); } }
+  @keyframes slideR { from { opacity: 0; transform: translateX(-24px); } }
+  .swipe-hint { color: var(--muted); font-size: 12px; text-align: center; margin-top: 10px; opacity: .7; }
+  tbody tr { cursor: pointer; }
 
   .week-nav { display: flex; align-items: center; gap: 6px; }
   .week-nav button { background: var(--card-2); border: 0; color: var(--text); width: 30px; height: 30px; border-radius: 50%; font-size: 16px; }
@@ -163,9 +170,17 @@
   <button class="main-btn" id="mainBtn">Clock In</button>
   <button class="break-btn" id="breakBtn" disabled>Start Break</button>
 
-  <section class="card">
-    <h2>Today</h2>
+  <section class="card" id="dayCard">
+    <h2>
+      <span id="dayTitle">Today</span>
+      <span class="week-nav">
+        <span class="week-label" id="dayHours"></span>
+        <button id="prevDay" aria-label="Previous day">‹</button>
+        <button id="nextDay" aria-label="Next day">›</button>
+      </span>
+    </h2>
     <ul class="log" id="log"></ul>
+    <div class="swipe-hint">Swipe to see other days · tap an entry to edit</div>
   </section>
 
   <section class="card">
@@ -250,6 +265,7 @@
   let sent = load('hours.sent', {});              // weekStartKey -> ms sent
   let pending = load('hours.pending', []);        // weekStartKey[] waiting to send
   let weekOffset = 0;
+  let dayOffset = 0;   // day shown in the Today card, relative to today
 
   // Setup link: ...#setup?svc=..&tpl=..&key=.. fills in the email service.
   // Works when opened directly, or pasted via Settings (the Home Screen app
@@ -398,10 +414,16 @@
   }
 
   function renderLog() {
-    const k = dayKey(Date.now());
+    const day = addDays(startOfDay(Date.now()), dayOffset);
+    const k = dayKey(day);
+    $('dayTitle').textContent = dayOffset === 0 ? 'Today' : dayOffset === -1 ? 'Yesterday'
+      : day.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    const b = summarize().days[k];
+    $('dayHours').textContent = b ? `${hrs(b.total - b.brk)} hrs` : '';
+    $('nextDay').style.visibility = dayOffset < 0 ? 'visible' : 'hidden';
     const list = events.map((e, i) => ({ ...e, i })).filter(e => dayKey(e.t) === k);
     const ul = $('log');
-    if (!list.length) { ul.innerHTML = '<li class="empty" style="justify-content:center">Nothing yet today</li>'; return; }
+    if (!list.length) { ul.innerHTML = `<li class="empty" style="justify-content:center">Nothing ${dayOffset ? 'this day' : 'yet today'}</li>`; return; }
     ul.innerHTML = list.map(e => `
       <li data-i="${e.i}">
         <span class="lbl"><span class="pip" style="background:${COLOR[e.type]}"></span>${LABEL[e.type]}</span>
@@ -416,7 +438,7 @@
     $('weekLabel').textContent = `${fmtShort(start)} – ${fmtShort(addDays(start, 6))}`;
     const tk = dayKey(now);
     $('weekBody').innerHTML = rows.map(r => `
-      <tr class="${dayKey(r.date) === tk ? 'today' : ''} ${r.total ? '' : 'zero'}">
+      <tr data-k="${dayKey(r.date)}" class="${dayKey(r.date) === tk ? 'today' : ''} ${r.total ? '' : 'zero'}">
         <td class="d">${DAYS[r.date.getDay()]}<small>${r.date.getDate()}</small></td>
         <td>${hrs(r.total)}</td>
         <td>${hrs(r.total - r.brk)}</td>
@@ -429,6 +451,37 @@
     $('nextWeek').style.visibility = weekOffset < 0 ? 'visible' : 'hidden';
   }
 
+  // ---------- day switching ----------
+  function goDay(delta) {
+    const next = Math.min(0, dayOffset + delta);
+    if (next === dayOffset) return;
+    dayOffset = next;
+    renderLog();
+    const ul = $('log');
+    ul.classList.remove('slide-l', 'slide-r'); void ul.offsetWidth;
+    ul.classList.add(delta > 0 ? 'slide-l' : 'slide-r');
+  }
+  $('prevDay').onclick = () => goDay(-1);
+  $('nextDay').onclick = () => goDay(1);
+  let touchX = null, touchY = null;
+  $('dayCard').addEventListener('touchstart', e => { touchX = e.touches[0].clientX; touchY = e.touches[0].clientY; }, { passive: true });
+  $('dayCard').addEventListener('touchend', e => {
+    if (touchX == null) return;
+    const dx = e.changedTouches[0].clientX - touchX, dy = e.changedTouches[0].clientY - touchY;
+    touchX = null;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) goDay(dx < 0 ? 1 : -1);
+  });
+  // Tap a day in the week table to open it in the day card
+  $('weekBody').addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-k]');
+    if (!tr) return;
+    const [y, m, d] = tr.dataset.k.split('-').map(Number);
+    const target = Math.round((new Date(y, m - 1, d) - startOfDay(Date.now())) / 86400000);
+    if (target > 0) return;
+    dayOffset = target; renderLog();
+    $('dayCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
   $('prevWeek').onclick = () => { weekOffset--; render(); };
   $('nextWeek').onclick = () => { weekOffset = Math.min(0, weekOffset + 1); render(); };
 
@@ -439,7 +492,16 @@
     editing = i;
     $('editTitle').textContent = LABEL[events[i].type];
     $('editTime').value = toLocalInput(events[i].t);
+    $('editDelete').textContent = isBreak(events[i]) ? 'Delete break' : 'Delete';
     $('editDlg').showModal();
+  }
+  const isBreak = e => e.type === 'bs' || e.type === 'be';
+  // The other half of a break: the end right after a start, or the start right before an end
+  function breakPartner(i) {
+    const e = events[i];
+    if (e.type === 'bs') return events[i + 1]?.type === 'be' ? i + 1 : -1;
+    if (e.type === 'be') return events[i - 1]?.type === 'bs' ? i - 1 : -1;
+    return -1;
   }
   $('editCancel').onclick = () => $('editDlg').close();
   $('editSave').onclick = () => {
@@ -448,7 +510,16 @@
     $('editDlg').close();
   };
   $('editDelete').onclick = () => {
-    if (confirm(`Delete this ${LABEL[events[editing].type].toLowerCase()}?`)) {
+    const e = events[editing];
+    if (isBreak(e)) {
+      // Remove the whole break (start and end) so the time counts as work again
+      const j = breakPartner(editing);
+      const span = j < 0 ? '' : ` (${fmtTime(events[Math.min(editing, j)].t)} – ${fmtTime(events[Math.max(editing, j)].t)})`;
+      if (confirm(`Delete this break${span}? That time will count as work.`)) {
+        [editing, j].filter(x => x >= 0).sort((a, b) => b - a).forEach(x => events.splice(x, 1));
+        persist(); render(); toast('Break removed');
+      }
+    } else if (confirm(`Delete this ${LABEL[e.type].toLowerCase()}?`)) {
       events.splice(editing, 1); persist(); render();
     }
     $('editDlg').close();
