@@ -69,12 +69,13 @@
   const day = i => { const x = new Date(start); x.setDate(x.getDate() + i); return x; };
   const short = x => x.toLocaleDateString([], { month: 'short', day: 'numeric' });
   let total = 0, brk = 0;
-  const rows = data.d.map(([inT, outT, t, b], i) => {
+  const rows = data.d.map(([inT, outT, t, b, sites], i) => {
     total += t; brk += b;
     const dt = day(i);
     return `<tr class="${t ? '' : 'zero'}">
       <td>${DAYS[dt.getDay()]} <span class="m">${short(dt)}</span>
-        ${inT ? `<div class="span">${esc(inT)} – ${esc(outT) || 'now'}</div>` : ''}</td>
+        ${inT ? `<div class="span">${esc(inT)} – ${esc(outT) || 'now'}</div>` : ''}
+        ${sites ? `<div class="span">${esc(sites)}</div>` : ''}</td>
       <td>${h(b)}</td><td>${h(t)}</td><td>${h(t - b)}</td></tr>`;
   }).join('');
   const end = day(6);
@@ -92,6 +93,10 @@
       <tbody>${rows}</tbody>
       <tfoot><tr><td>Week</td><td>${h(brk)}</td><td>${h(total)}</td><td>${h(total - brk)}</td></tr></tfoot>
     </table></div>
+    ${data.p ? `<div class="card" style="margin-top:12px"><table>
+      <thead><tr><th>Site</th><th>Break</th><th>Total</th><th>Adjusted</th></tr></thead>
+      <tbody>${data.p.map(([name, t, b]) => `<tr><td>${esc(name)}</td><td>${h(b)}</td><td>${h(t)}</td><td>${h(t - b)}</td></tr>`).join('')}</tbody>
+    </table></div>` : ''}
     <footer>Hours shown in decimal (7.50 = 7h 30m)</footer>
     <div class="stamp" id="stamp">Approved by Keith ✅</div>`;
 

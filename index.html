@@ -143,6 +143,22 @@
   .toggle input { width: auto; transform: scale(1.3); }
   details { margin-top: 16px; }
   summary { color: var(--accent); font-size: 14px; font-weight: 600; }
+  .sites { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 0 0 18px; }
+  .chip {
+    padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+    color: var(--muted); font-size: 14px; font-weight: 600;
+  }
+  .chip.on { color: var(--text); border-color: var(--accent); background: rgba(165,180,252,.14); }
+  .chip.add { padding: 8px 12px; }
+  select {
+    width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); min-height: 46px;
+    background: var(--bg); color: var(--text); font-size: 16px; font-family: inherit;
+  }
+  .two { display: flex; gap: 10px; } .two > div { flex: 1; min-width: 0; }
+  .by-site { margin-top: 14px; }
+  .by-site h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .log .site { color: var(--muted); font-size: 13px; }
+  .add-shift { display: block; width: 100%; margin-top: 10px; background: none; border: 1px dashed var(--line); color: var(--accent); padding: 10px; border-radius: 12px; font-size: 14px; font-weight: 600; }
   .toast {
     position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 24px); transform: translate(-50%, 20px);
     background: var(--card-2); color: var(--text); padding: 12px 18px; border-radius: 14px; font-size: 14px;
@@ -168,6 +184,7 @@
   </section>
 
   <button class="main-btn" id="mainBtn">Clock In</button>
+  <div class="sites" id="sites"></div>
   <button class="break-btn" id="breakBtn" disabled>Start Break</button>
 
   <section class="card" id="dayCard">
@@ -180,6 +197,7 @@
       </span>
     </h2>
     <ul class="log" id="log"></ul>
+    <button class="add-shift" id="addShift">＋ Add a shift</button>
     <div class="swipe-hint">Swipe to see other days · tap an entry to edit</div>
   </section>
 
@@ -197,6 +215,7 @@
       <tbody id="weekBody"></tbody>
       <tfoot><tr><td>Total</td><td id="wkTotal"></td><td id="wkAdj"></td></tr></tfoot>
     </table>
+    <div class="by-site" id="bySite"></div>
     <div class="row">
       <button class="btn" id="shareLink">Share link</button>
       <button class="btn" id="exportCsv">Export file</button>
@@ -213,6 +232,8 @@
   <input id="sName" autocomplete="name" placeholder="Name on the report">
   <label for="sTo">Send report to</label>
   <input id="sTo" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com">
+  <label for="sSites">Work sites</label>
+  <input id="sSites" placeholder="Boutique, Five Watt Coffee">
   <div class="toggle"><span>Send automatically on Friday</span><input type="checkbox" id="sAuto"></div>
   <details>
     <summary>Email service (EmailJS)</summary>
@@ -238,10 +259,32 @@
   <p class="hint">Fix a time if you forgot to tap.</p>
   <label for="editTime">Time</label>
   <input id="editTime" type="datetime-local">
+  <div id="editSiteWrap">
+    <label for="editSite">Site</label>
+    <select id="editSite"></select>
+  </div>
   <div class="row">
     <button class="btn danger" id="editDelete">Delete</button>
     <button class="btn" id="editCancel">Cancel</button>
     <button class="btn primary" id="editSave">Save</button>
+  </div>
+</dialog>
+
+<!-- Add shift -->
+<dialog id="addDlg">
+  <h3 id="addTitle">Add a shift</h3>
+  <p class="hint">For hours you worked but didn't clock.</p>
+  <label for="addSite">Site</label>
+  <select id="addSite"></select>
+  <div class="two">
+    <div><label for="addStart">Start</label><input id="addStart" type="time" value="09:00"></div>
+    <div><label for="addEnd">End</label><input id="addEnd" type="time" value="17:00"></div>
+  </div>
+  <label for="addBreak">Break (minutes)</label>
+  <input id="addBreak" type="number" inputmode="numeric" min="0" value="0">
+  <div class="row">
+    <button class="btn" id="addCancel">Cancel</button>
+    <button class="btn primary" id="addSave">Add</button>
   </div>
 </dialog>
 
@@ -253,6 +296,7 @@
   const LABEL = { in: 'Clock in', out: 'Clock out', bs: 'Break start', be: 'Break end' };
   const COLOR = { in: 'var(--in-a)', out: 'var(--out-a)', bs: 'var(--brk)', be: 'var(--brk)' };
   const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   // ---------- storage ----------
   function load(key, fallback) {
@@ -260,8 +304,10 @@
   }
   function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
 
-  let events = load('hours.events', []);          // [{t: ms, type: 'in'|'out'|'bs'|'be'}]
+  let events = load('hours.events', []);          // [{t: ms, type: 'in'|'out'|'bs'|'be', site?: name on 'in'}]
   let settings = load('hours.settings', { name: '', to: '', auto: true, svc: '', tpl: '', key: '' });
+  settings.sites ||= [];                          // work site names
+  settings.site ||= '';                           // site for the next clock-in
   let sent = load('hours.sent', {});              // weekStartKey -> ms sent
   let pending = load('hours.pending', []);        // weekStartKey[] waiting to send
   let weekOffset = 0;
@@ -313,50 +359,67 @@
   // A shift (and its breaks) count toward the day it was clocked in.
   function summarize(now = Date.now()) {
     const days = {};
-    let inAt = null, brkAt = null, day = null;
-    const bucket = k => (days[k] ||= { total: 0, brk: 0, first: null, last: null });
+    let inAt = null, brkAt = null, day = null, site = '', shiftBrk = 0;
+    const bucket = k => (days[k] ||= { total: 0, brk: 0, first: null, last: null, sites: {} });
+    const endShift = (b, t) => {
+      const x = (b.sites[site] ||= { total: 0, brk: 0 });
+      x.total += t - inAt; x.brk += shiftBrk;
+      b.total += t - inAt;
+    };
     for (const e of events) {
       if (e.type === 'in' && inAt == null) {
-        inAt = e.t; day = dayKey(e.t);
+        inAt = e.t; day = dayKey(e.t); site = e.site || ''; shiftBrk = 0;
         const b = bucket(day); if (b.first == null) b.first = e.t;
       } else if (e.type === 'bs' && inAt != null && brkAt == null) {
         brkAt = e.t;
       } else if (e.type === 'be' && brkAt != null) {
-        bucket(day).brk += e.t - brkAt; brkAt = null;
+        bucket(day).brk += e.t - brkAt; shiftBrk += e.t - brkAt; brkAt = null;
       } else if (e.type === 'out' && inAt != null) {
         const b = bucket(day);
-        if (brkAt != null) { b.brk += e.t - brkAt; brkAt = null; }
-        b.total += e.t - inAt; b.last = e.t; inAt = null;
+        if (brkAt != null) { b.brk += e.t - brkAt; shiftBrk += e.t - brkAt; brkAt = null; }
+        endShift(b, e.t); b.last = e.t; inAt = null;
       }
     }
     if (inAt != null) {
       const b = bucket(day);
-      b.total += now - inAt;
-      if (brkAt != null) b.brk += now - brkAt;
+      if (brkAt != null) { b.brk += now - brkAt; shiftBrk += now - brkAt; }
+      endShift(b, now);
     }
     const status = inAt == null ? 'off' : brkAt == null ? 'working' : 'break';
-    return { days, status, inAt, brkAt };
+    return { days, status, inAt, brkAt, site: inAt == null ? null : site };
   }
 
   function weekRows(start, now = Date.now()) {
     const { days } = summarize(now);
     const rows = [];
     let total = 0, brk = 0;
+    const sites = {};
     for (let i = 0; i < 7; i++) {
       const d = addDays(start, i);
-      const b = days[dayKey(d)] || { total: 0, brk: 0, first: null, last: null };
+      const b = days[dayKey(d)] || { total: 0, brk: 0, first: null, last: null, sites: {} };
       total += b.total; brk += b.brk;
+      for (const [s, x] of Object.entries(b.sites)) {
+        const w = (sites[s] ||= { total: 0, brk: 0 }); w.total += x.total; w.brk += x.brk;
+      }
       rows.push({ date: d, ...b });
     }
-    return { rows, total, brk };
+    // Per-site totals, only worth showing once a site has been used
+    const bySite = Object.keys(sites).some(Boolean)
+      ? Object.entries(sites).map(([name, x]) => ({ name: name || 'No site', ...x })).sort((a, b) => b.total - a.total)
+      : [];
+    return { rows, total, brk, bySite };
   }
 
   // ---------- actions ----------
-  function add(type) { events.push({ t: Date.now(), type }); persist(); render(); }
+  function add(type) {
+    const e = { t: Date.now(), type };
+    if (type === 'in' && settings.site) e.site = settings.site;
+    events.push(e); persist(); render();
+  }
 
   $('mainBtn').onclick = () => {
     const { status } = summarize();
-    if (status === 'off') { add('in'); toast('Clocked in'); return; }
+    if (status === 'off') { add('in'); toast(settings.site ? `Clocked in at ${settings.site}` : 'Clocked in'); return; }
     if (status === 'break') events.push({ t: Date.now(), type: 'be' });
     add('out');
     const td = summarize().days[dayKey(Date.now())] || { total: 0, brk: 0 };
@@ -377,6 +440,54 @@
     }
   };
 
+  // ---------- sites ----------
+  // Off the clock: picks the site for the next clock-in.
+  // On the clock: tags an untagged shift, or switches sites (clock out + clock in).
+  const lastIn = () => { for (let i = events.length - 1; i >= 0; i--) if (events[i].type === 'in') return events[i]; };
+  function pickSite(name) {
+    const { status, site } = summarize();
+    if (status === 'off') {
+      settings.site = settings.site === name ? '' : name;
+      save('hours.settings', settings); render(); return;
+    }
+    if (site === name) return;
+    settings.site = name; save('hours.settings', settings);
+    if (!site) { lastIn().site = name; persist(); render(); toast(`This shift is now at ${name}`); return; }
+    if (!confirm(`Switch to ${name}? This clocks you out of ${site} and in at ${name}.`)) return;
+    const t = Date.now();
+    if (status === 'break') events.push({ t, type: 'be' });
+    events.push({ t, type: 'out' }, { t, type: 'in', site: name });
+    persist(); render(); toast(`Switched to ${name}`);
+  }
+  function addSiteName() {
+    const name = (prompt('Site name') || '').trim();
+    if (!name) return null;
+    if (!settings.sites.includes(name)) settings.sites.push(name);
+    save('hours.settings', settings);
+    return name;
+  }
+  let sitesSig = '';
+  function renderSites(status, site) {
+    const cur = status === 'off' ? settings.site : site;
+    const sig = JSON.stringify([settings.sites, cur]);
+    if (sig === sitesSig) return;   // render() runs every second; don't rebuild under a finger
+    sitesSig = sig;
+    $('sites').innerHTML = settings.sites.map((s, i) =>
+      `<button class="chip ${s === cur ? 'on' : ''}" data-i="${i}">${esc(s)}</button>`).join('') +
+      `<button class="chip add" data-add="1" aria-label="Add site">${settings.sites.length ? '＋' : '＋ Add work site'}</button>`;
+  }
+  $('sites').onclick = e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.add) { const n = addSiteName(); if (n) pickSite(n); return; }
+    pickSite(settings.sites[+b.dataset.i]);
+  };
+  const siteOptions = (sel, cur) => {
+    const names = [...settings.sites];
+    if (cur && !names.includes(cur)) names.push(cur);
+    sel.innerHTML = `<option value="">No site</option>` + names.map(s => `<option ${s === cur ? 'selected' : ''}>${esc(s)}</option>`).join('');
+  };
+
   // Tap the date 7 times
   let taps = 0, tapTimer;
   $('date').onclick = () => {
@@ -387,13 +498,14 @@
   // ---------- render ----------
   function render() {
     const now = Date.now();
-    const { days, status, brkAt } = summarize(now);
+    const { days, status, brkAt, site } = summarize(now);
     const today = days[dayKey(now)] || { total: 0, brk: 0 };
 
     $('date').textContent = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
     const st = $('status');
     st.className = 'status ' + status;
-    $('statusText').textContent = { off: 'Off the clock', working: 'Working', break: 'On break' }[status];
+    $('statusText').textContent = { off: 'Off the clock', working: 'Working', break: 'On break' }[status] + (site ? ` · ${site}` : '');
+    renderSites(status, site);
 
     $('clock').textContent = fmtHMS(today.total - today.brk);
     $('sub').textContent = status === 'break'
@@ -426,7 +538,7 @@
     if (!list.length) { ul.innerHTML = `<li class="empty" style="justify-content:center">Nothing ${dayOffset ? 'this day' : 'yet today'}</li>`; return; }
     ul.innerHTML = list.map(e => `
       <li data-i="${e.i}">
-        <span class="lbl"><span class="pip" style="background:${COLOR[e.type]}"></span>${LABEL[e.type]}</span>
+        <span class="lbl"><span class="pip" style="background:${COLOR[e.type]}"></span>${LABEL[e.type]}${e.site ? ` <span class="site">· ${esc(e.site)}</span>` : ''}</span>
         <span class="t">${fmtTime(e.t)}</span>
       </li>`).join('');
     ul.querySelectorAll('li[data-i]').forEach(li => li.onclick = () => openEdit(+li.dataset.i));
@@ -434,7 +546,9 @@
 
   function renderWeek(now) {
     const start = addDays(weekStart(now), weekOffset * 7);
-    const { rows, total, brk } = weekRows(start, now);
+    const { rows, total, brk, bySite } = weekRows(start, now);
+    $('bySite').innerHTML = bySite.length ? `<h4>By site</h4><table><tbody>${bySite.map(x => `
+      <tr><td>${esc(x.name)}</td><td>${hrs(x.total)}</td><td>${hrs(x.total - x.brk)}</td></tr>`).join('')}</tbody></table>` : '';
     $('weekLabel').textContent = `${fmtShort(start)} – ${fmtShort(addDays(start, 6))}`;
     const tk = dayKey(now);
     $('weekBody').innerHTML = rows.map(r => `
@@ -493,6 +607,8 @@
     $('editTitle').textContent = LABEL[events[i].type];
     $('editTime').value = toLocalInput(events[i].t);
     $('editDelete').textContent = isBreak(events[i]) ? 'Delete break' : 'Delete';
+    $('editSiteWrap').hidden = events[i].type !== 'in';
+    siteOptions($('editSite'), events[i].site || '');
     $('editDlg').showModal();
   }
   const isBreak = e => e.type === 'bs' || e.type === 'be';
@@ -506,7 +622,10 @@
   $('editCancel').onclick = () => $('editDlg').close();
   $('editSave').onclick = () => {
     const t = new Date($('editTime').value).getTime();
-    if (!isNaN(t)) { events[editing].t = t; persist(); render(); }
+    const e = events[editing];
+    if (!isNaN(t)) e.t = t;
+    if (e.type === 'in') { if ($('editSite').value) e.site = $('editSite').value; else delete e.site; }
+    persist(); render();
     $('editDlg').close();
   };
   $('editDelete').onclick = () => {
@@ -525,16 +644,53 @@
     $('editDlg').close();
   };
 
+  // ---------- add a shift ----------
+  // Whether a shift is open at time t
+  const onClockAt = t => { let on = false; for (const e of events) { if (e.t >= t) break; if (e.type === 'in') on = true; if (e.type === 'out') on = false; } return on; };
+  $('addShift').onclick = () => {
+    const day = addDays(startOfDay(Date.now()), dayOffset);
+    $('addTitle').textContent = `Add a shift · ${day.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}`;
+    siteOptions($('addSite'), settings.site);
+    $('addBreak').value = 0;
+    $('addDlg').showModal();
+  };
+  $('addCancel').onclick = () => $('addDlg').close();
+  $('addSave').onclick = () => {
+    const day = addDays(startOfDay(Date.now()), dayOffset);
+    const at = v => { const [h, m] = v.split(':').map(Number); const d = new Date(day); d.setHours(h, m, 0, 0); return d.getTime(); };
+    if (!$('addStart').value || !$('addEnd').value) { toast('Pick a start and end time'); return; }
+    const s = at($('addStart').value);
+    let e = at($('addEnd').value);
+    if (e <= s) e += 86400000;   // ran past midnight
+    if (e > Date.now()) { toast('That shift ends in the future'); return; }
+    const brk = Math.max(0, +$('addBreak').value || 0) * 60000;
+    if (brk >= e - s) { toast('The break is longer than the shift'); return; }
+    if (onClockAt(s) || events.some(x => x.t >= s && x.t <= e)) { toast('That overlaps another shift'); return; }
+    const inE = { t: s, type: 'in' };
+    if ($('addSite').value) inE.site = $('addSite').value;
+    events.push(inE, { t: e, type: 'out' });
+    if (brk) {   // put the break in the middle of the shift
+      const bs = s + Math.round((e - s - brk) / 2 / 60000) * 60000;
+      events.push({ t: bs, type: 'bs' }, { t: bs + brk, type: 'be' });
+    }
+    persist(); render();
+    $('addDlg').close();
+    toast(`Added ${hrs(e - s - brk)} hrs${inE.site ? ' at ' + inE.site : ''}`);
+  };
+
   // ---------- settings ----------
   const fields = { sName: 'name', sTo: 'to', sSvc: 'svc', sTpl: 'tpl', sKey: 'key' };
   $('openSettings').onclick = () => {
     for (const [id, k] of Object.entries(fields)) $(id).value = settings[k] || '';
     $('sAuto').checked = !!settings.auto;
+    $('sSites').value = settings.sites.join(', ');
     $('settings').showModal();
   };
   function readSettings() {
     for (const [id, k] of Object.entries(fields)) settings[k] = $(id).value.trim();
     settings.auto = $('sAuto').checked;
+    settings.sites = [...new Set($('sSites').value.split(',').map(x => x.trim()).filter(Boolean))];
+    if (!settings.sites.includes(settings.site)) settings.site = '';
     save('hours.settings', settings);
   }
   $('pasteSetup').onclick = async () => {
@@ -547,7 +703,7 @@
     render();
     toast('Setup applied ✅');
   };
-  $('saveSettings').onclick =() => { readSettings(); $('settings').close(); flushPending(); };
+  $('saveSettings').onclick = () => { readSettings(); $('settings').close(); render(); flushPending(); };
   $('sendNow').onclick = async () => {
     readSettings();
     const start = addDays(weekStart(Date.now()), weekOffset * 7);
@@ -560,13 +716,14 @@
 
   // Packs the week into the URL fragment (never sent to any server) for report.html
   async function shareLink(start) {
-    const { rows } = weekRows(start);
+    const { rows, bySite } = weekRows(start);
     const min = ms => Math.round(ms / 60000);
     const data = {
       n: settings.name || '',
       s: dayKey(start),
-      d: rows.map(r => [r.first ? fmtTime(r.first) : '', r.last ? fmtTime(r.last) : '', min(r.total), min(r.brk)])
+      d: rows.map(r => [r.first ? fmtTime(r.first) : '', r.last ? fmtTime(r.last) : '', min(r.total), min(r.brk), daySites(r)])
     };
+    if (bySite.length) data.p = bySite.map(x => [x.name, min(x.total), min(x.brk)]);
     const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(data)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     const url = new URL('report.html', location.href).href + '#' + b64;
     const title = `Hours for ${fmtShort(start)} – ${fmtShort(addDays(start, 6))}`;
@@ -578,8 +735,9 @@
   }
 
   // ---------- report ----------
+  const daySites = r => Object.keys(r.sites || {}).filter(Boolean).join(', ');
   function buildReport(start) {
-    const { rows, total, brk } = weekRows(start);
+    const { rows, total, brk, bySite } = weekRows(start);
     const end = addDays(start, 6);
     const range = `${fmtShort(start)} – ${fmtShort(end)}, ${end.getFullYear()}`;
     const who = settings.name ? `${settings.name} · ` : '';
@@ -587,7 +745,7 @@
     const cell = 'padding:8px 12px;border-bottom:1px solid #e5e7eb;';
     const num = cell + 'text-align:right;font-variant-numeric:tabular-nums;';
     const body = rows.map(r => `<tr>
-        <td style="${cell}">${DAYS[r.date.getDay()]} ${fmtShort(r.date)}</td>
+        <td style="${cell}">${DAYS[r.date.getDay()]} ${fmtShort(r.date)}${daySites(r) ? `<br><span style="color:#6b7280;font-size:12px">${esc(daySites(r))}</span>` : ''}</td>
         <td style="${cell}">${r.first ? fmtTime(r.first) : '—'}</td>
         <td style="${cell}">${r.last ? fmtTime(r.last) : '—'}</td>
         <td style="${num}">${hrs(r.brk)}</td>
@@ -606,11 +764,19 @@
         <td style="${num}font-weight:700">${hrs(brk)}</td>
         <td style="${num}font-weight:700">${hrs(total)}</td>
         <td style="${num}font-weight:700">${hrs(total - brk)}</td></tr></tfoot>
-      </table></div>`;
-    const csv = [['Day', 'Date', 'Clock in', 'Clock out', 'Break hours', 'Total hours', 'Adjusted hours']]
-      .concat(rows.map(r => [DAYS[r.date.getDay()], dayKey(r.date), r.first ? fmtTime(r.first) : '', r.last ? fmtTime(r.last) : '', hrs(r.brk), hrs(r.total), hrs(r.total - r.brk)]))
-      .concat([['Week total', '', '', '', hrs(brk), hrs(total), hrs(total - brk)]])
-      .map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+      </table>
+      ${bySite.length ? `<h3 style="margin:20px 0 8px;font-size:16px">By site</h3>
+      <table style="border-collapse:collapse;font-size:14px">
+        <thead><tr><th style="${th}">Site</th><th style="${th}text-align:right">Break hrs</th>
+        <th style="${th}text-align:right">Total hours</th><th style="${th}text-align:right">Adjusted hours</th></tr></thead>
+        <tbody>${bySite.map(x => `<tr><td style="${cell}">${esc(x.name)}</td><td style="${num}">${hrs(x.brk)}</td>
+        <td style="${num}">${hrs(x.total)}</td><td style="${num}">${hrs(x.total - x.brk)}</td></tr>`).join('')}</tbody>
+      </table>` : ''}</div>`;
+    const csv = [['Day', 'Date', 'Sites', 'Clock in', 'Clock out', 'Break hours', 'Total hours', 'Adjusted hours']]
+      .concat(rows.map(r => [DAYS[r.date.getDay()], dayKey(r.date), daySites(r), r.first ? fmtTime(r.first) : '', r.last ? fmtTime(r.last) : '', hrs(r.brk), hrs(r.total), hrs(r.total - r.brk)]))
+      .concat([['Week total', '', '', '', '', hrs(brk), hrs(total), hrs(total - brk)]])
+      .concat(bySite.length ? [[], ['By site']].concat(bySite.map(x => [x.name, '', '', '', '', hrs(x.brk), hrs(x.total), hrs(x.total - x.brk)])) : [])
+      .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     return { subject, html, csv };
   }
 
