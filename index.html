@@ -938,7 +938,12 @@
   window.addEventListener('online', flushPending);
   setInterval(() => { if (!document.hidden) render(); }, 1000);
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    const registration = navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+    const checkUpdate = () => registration.then(r => r.update()).catch(() => {});
+    checkUpdate();
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUpdate(); });
+  }
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
   if (applySetup(location.hash)) {
