@@ -858,8 +858,8 @@
     const { days } = summarize(now);
     const start = addDays(weekStart(now), weekOffset * 7);
     const from = dayKey(start), until = dayKey(addDays(start, 7));
-    const rows = [['Date', 'Jobsite', 'Total hours', 'Break hours', 'Hours worked', 'Running total hours', 'Start time', 'End time']];
-    const exportTime = t => `${dayKey(t)} ${pad(new Date(t).getHours())}:${pad(new Date(t).getMinutes())}`;
+    const rows = [['Date', 'Jobsite', 'Total hours', 'Break hours', 'Hours worked', 'Running total hours', 'Start–End time']];
+    const exportTime = t => `${pad(new Date(t).getHours())}:${pad(new Date(t).getMinutes())}`;
     let total = 0, brk = 0, worked = 0;
     for (const date of Object.keys(days).sort()) {
       if (range === 'week' && (date < from || date >= until)) continue;
@@ -873,12 +873,12 @@
         total += gross; brk += breaks; worked += net;
         rows.push([date, name || 'No site', (gross / 100).toFixed(2),
           (breaks / 100).toFixed(2), (net / 100).toFixed(2), (worked / 100).toFixed(2),
-          exportTime(x.first), x.last == null ? '' : exportTime(x.last)]);
+          `${exportTime(x.first)} – ${x.last == null ? 'In progress' : exportTime(x.last)}`]);
       }
     }
     if (rows.length === 1) return null;
     rows.push(['TOTAL', '', (total / 100).toFixed(2), (brk / 100).toFixed(2),
-      (worked / 100).toFixed(2), (worked / 100).toFixed(2), '', '']);
+      (worked / 100).toFixed(2), (worked / 100).toFixed(2), '']);
     return rows.map(row => row.map(value => {
       let text = String(value);
       if (/^[=+@\-\t\r\n]/.test(text)) text = "'" + text;

@@ -1,5 +1,5 @@
 ﻿// Network-first so updates show up right away; falls back to cache offline.
-const CACHE = 'hours-v6';
+const CACHE = 'hours-v7';
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

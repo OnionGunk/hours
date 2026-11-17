@@ -48,9 +48,9 @@ The CSV has one row per date and jobsite: total hours before breaks, break hours
 hours worked after breaks, and a running total of worked hours. A final TOTAL row
 sums the selection. Decimal hours are rounded to two places and totals sum the
 displayed values. Overnight shifts use their clock-in date. Active shifts are
-included up to export time. Start time and End time show the first clock-in and
-last clock-out for that date and jobsite, with dates included to clarify overnight
-shifts. End time is blank while a shift is still active. Multiple shifts at the
+included up to export time. Start–End time combines the first clock-in and
+last clock-out in one column (for example, 08:00 – 17:00), without dates.
+Active shifts show In progress in place of the end time. Multiple shifts at the
 same jobsite on one day are combined; hours exclude gaps between shifts.
 
 On iPhone, use the share sheet to save or send the file. Export from the same
