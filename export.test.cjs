@@ -21,6 +21,9 @@ const run = (range,site) => vm.runInContext('buildExportCsv('+JSON.stringify(ran
 assert.ok(run('all',null).includes('"TOTAL","","13.00","1.00","12.00","12.00"'));
 assert.ok(run('all','A').includes('"TOTAL","","6.00","1.00","5.00","5.00"'));
 assert.ok(!run('all','A').includes('"B"'));
+assert.ok(run('all',['A','']).includes('"TOTAL","","7.00","1.00","6.00","6.00"'));
+assert.ok(!run('all',['A','']).includes('"B"'));
+assert.equal(run('all',[]),null);
 assert.ok(!run('week',null).includes('2026-11-02'));
 assert.ok(run('all','').includes('"No site","1.00"'));
 assert.ok(run('all',null).includes('"Comma, ""quote"""'));

@@ -40,7 +40,8 @@ the app.
 ## Export hours as CSV
 
 Tap **Export CSV**, choose **All saved hours** or **Displayed week**, then select
-**All jobsites** or a particular jobsite. Older sites remain available even if
+**All jobsites** or check any combination of jobsites (for example, Richard and
+No site). Uncheck All jobsites first to clear the selection. Older sites remain available even if
 removed from Settings. Unassigned shifts appear under **No site**.
 
 The CSV has one row per date and jobsite: total hours before breaks, break hours,
