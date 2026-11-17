@@ -37,6 +37,23 @@ If a send fails (e.g. no signal), the app retries the next time you open it.
 If you don't work a Friday, last week's report goes out the next time you open
 the app.
 
+## Export hours as CSV
+
+Tap **Export CSV**, choose **All saved hours** or **Displayed week**, then select
+**All jobsites** or a particular jobsite. Older sites remain available even if
+removed from Settings. Unassigned shifts appear under **No site**.
+
+The CSV has one row per date and jobsite: total hours before breaks, break hours,
+hours worked after breaks, and a running total of worked hours. A final TOTAL row
+sums the selection. Decimal hours are rounded to two places and totals sum the
+displayed values. Overnight shifts use their clock-in date. Active shifts are
+included up to export time.
+
+On iPhone, use the share sheet to save or send the file. Export from the same
+Home Screen app where you track hours, since Safari has separate saved data.
+
+Run export calculation checks with `node export.test.cjs`.
+
 ## Hidden extras
 
 - Tap the date at the top 7 times.

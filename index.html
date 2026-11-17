@@ -218,11 +218,24 @@
     <div class="by-site" id="bySite"></div>
     <div class="row">
       <button class="btn" id="shareLink">Share link</button>
-      <button class="btn" id="exportCsv">Export file</button>
+      <button class="btn" id="exportCsv">Export CSV</button>
     </div>
     <div class="sent-note" id="sentNote"></div>
   </section>
 </div>
+
+<dialog id="exportDlg">
+  <h3>Export hours</h3>
+  <p class="hint">Daily hours and totals. Active shifts are included up to export time.</p>
+  <label for="exportRange">Date range</label>
+  <select id="exportRange"><option value="all">All saved hours</option><option value="week">Displayed week</option></select>
+  <label for="exportSite">Jobsite</label>
+  <select id="exportSite"></select>
+  <div class="row">
+    <button class="btn" id="exportCancel">Cancel</button>
+    <button class="btn primary" id="exportSave">Export CSV</button>
+  </div>
+</dialog>
 
 <!-- Settings -->
 <dialog id="settings">
@@ -711,7 +724,14 @@
     catch (e) { toast(e.message); }
     render();
   };
-  $('exportCsv').onclick = () => exportFile(addDays(weekStart(Date.now()), weekOffset * 7));
+  $('exportCsv').onclick = () => {
+    const names = [...new Set([...settings.sites, ...events.filter(e => e.type === 'in').map(e => e.site || '')])].sort();
+    $('exportSite').innerHTML = '<option value="all">All jobsites</option>' +
+      names.map(s => `<option value="${esc(JSON.stringify(s))}">${esc(s || 'No site')}</option>`).join('');
+    $('exportDlg').showModal();
+  };
+  $('exportCancel').onclick = () => $('exportDlg').close();
+  $('exportSave').onclick = () => exportFile();
   $('shareLink').onclick = () => shareLink(addDays(weekStart(Date.now()), weekOffset * 7));
 
   // Packs the week into the URL fragment (never sent to any server) for report.html
@@ -821,17 +841,58 @@
     render();
   }
 
-  async function exportFile(start) {
-    const { csv } = buildReport(start);
-    const name = `hours-${dayKey(start)}.csv`;
-    const file = new File([csv], name, { type: 'text/csv' });
+  function buildExportCsv(range, site, now = Date.now()) {
+    const { days } = summarize(now);
+    const start = addDays(weekStart(now), weekOffset * 7);
+    const from = dayKey(start), until = dayKey(addDays(start, 7));
+    const rows = [['Date', 'Jobsite', 'Total hours', 'Break hours', 'Hours worked', 'Running total hours']];
+    let total = 0, brk = 0, worked = 0;
+    for (const date of Object.keys(days).sort()) {
+      if (range === 'week' && (date < from || date >= until)) continue;
+      for (const name of Object.keys(days[date].sites).sort()) {
+        if (site !== null && name !== site) continue;
+        const x = days[date].sites[name];
+        // Sum displayed hundredths so spreadsheet totals reconcile exactly.
+        const gross = Math.round(Math.max(0, x.total) / 36000);
+        const breaks = Math.round(Math.max(0, x.brk) / 36000);
+        const net = gross - breaks;
+        total += gross; brk += breaks; worked += net;
+        rows.push([date, name || 'No site', (gross / 100).toFixed(2),
+          (breaks / 100).toFixed(2), (net / 100).toFixed(2), (worked / 100).toFixed(2)]);
+      }
+    }
+    if (rows.length === 1) return null;
+    rows.push(['TOTAL', '', (total / 100).toFixed(2), (brk / 100).toFixed(2),
+      (worked / 100).toFixed(2), (worked / 100).toFixed(2)]);
+    return rows.map(row => row.map(value => {
+      let text = String(value);
+      if (/^[=+@\-\t\r\n]/.test(text)) text = "'" + text;
+      return '"' + text.replace(/"/g, '""') + '"';
+    }).join(',')).join('\r\n');
+  }
+
+  async function exportFile() {
+    const now = Date.now();
+    const range = $('exportRange').value;
+    const site = $('exportSite').value === 'all' ? null : JSON.parse($('exportSite').value);
+    const csv = buildExportCsv(range, site, now);
+    if (!csv) { toast('No hours for this selection'); return; }
+    const period = range === 'all' ? 'all' : dayKey(addDays(weekStart(now), weekOffset * 7));
+    const slug = site === null ? 'all-sites' : (site || 'no-site').replace(/[^a-z0-9_-]+/gi, '-').slice(0, 60);
+    const name = `hours-${period}-${slug}-${dayKey(now)}.csv`;
+    const file = new File(['\uFEFF', csv], name, { type: 'text/csv;charset=utf-8' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try { await navigator.share({ files: [file], title: name }); } catch {}
-      return;
+      try {
+        await navigator.share({ files: [file], title: name });
+        $('exportDlg').close();
+        return;
+      } catch (e) { if (e.name === 'AbortError') return; }
     }
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(file); a.download = name; a.click();
+    a.href = URL.createObjectURL(file); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    $('exportDlg').close();
   }
 
   // ---------- misc ----------
